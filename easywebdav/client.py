@@ -128,11 +128,11 @@ class Client(object):
         else:
             self.cwd += stripped_path
 
-    def mkdir(self, path, safe=False):
+    def mkdir(self, path, safe=False, **kwargs):
         expected_codes = 201 if not safe else (201, 301, 405)
-        self._send('MKCOL', path, expected_codes)
+        self._send('MKCOL', path, expected_codes, **kwargs)
 
-    def mkdirs(self, path):
+    def mkdirs(self, path, **kwargs):
         dirs = [d for d in path.split('/') if d]
         if not dirs:
             return
@@ -142,7 +142,7 @@ class Client(object):
         try:
             for dir in dirs:
                 try:
-                    self.mkdir(dir, safe=True)
+                    self.mkdir(dir, safe=True, **kwargs)
                 except Exception as e:
                     if e.actual_code == 409:
                         raise
@@ -151,26 +151,27 @@ class Client(object):
         finally:
             self.cd(old_cwd)
 
-    def rmdir(self, path, safe=False):
+    def rmdir(self, path, safe=False, **kwargs):
         path = str(path).rstrip('/') + '/'
         expected_codes = 204 if not safe else (204, 404)
-        self._send('DELETE', path, expected_codes)
+        self._send('DELETE', path, expected_codes, **kwargs)
 
-    def delete(self, path):
-        self._send('DELETE', path, 204)
+    def delete(self, path, **kwargs):
+        self._send('DELETE', path, 204, **kwargs)
 
-    def upload(self, local_path_or_fileobj, remote_path):
+    def upload(self, local_path_or_fileobj, remote_path, **kwargs):
         if isinstance(local_path_or_fileobj, basestring):
             with open(local_path_or_fileobj, 'rb') as f:
                 self._upload(f, remote_path)
         else:
-            self._upload(local_path_or_fileobj, remote_path)
+            self._upload(local_path_or_fileobj, remote_path, **kwargs)
 
-    def _upload(self, fileobj, remote_path):
-        self._send('PUT', remote_path, (200, 201, 204), data=fileobj)
+    def _upload(self, fileobj, remote_path, **kwargs):
+        self._send('PUT', remote_path, (200, 201, 204),
+                          data=fileobj, **kwargs)
 
-    def download(self, remote_path, local_path_or_fileobj):
-        response = self._send('GET', remote_path, 200, stream=True)
+    def download(self, remote_path, local_path_or_fileobj, **kwargs):
+        response = self._send('GET', remote_path, 200, stream=True, **kwargs)
         if isinstance(local_path_or_fileobj, basestring):
             with open(local_path_or_fileobj, 'wb') as f:
                 self._download(f, response)
@@ -181,9 +182,10 @@ class Client(object):
         for chunk in response.iter_content(DOWNLOAD_CHUNK_SIZE_BYTES):
             fileobj.write(chunk)
 
-    def ls(self, remote_path='.'):
+    def ls(self, remote_path='.', **kwargs):
         headers = {'Depth': '1'}
-        response = self._send('PROPFIND', remote_path, (207, 301), headers=headers)
+        response = self._send('PROPFIND', remote_path, (207, 301),
+                                          headers=headers, **kwargs)
 
         # Redirect
         if response.status_code == 301:
@@ -193,6 +195,6 @@ class Client(object):
         tree = xml.fromstring(response.content)
         return [elem2file(elem) for elem in tree.findall('{DAV:}response')]
 
-    def exists(self, remote_path):
-        response = self._send('HEAD', remote_path, (200, 301, 404))
+    def exists(self, remote_path, **kwargs):
+        response = self._send('HEAD', remote_path, (200, 301, 404), **kwargs)
         return True if response.status_code != 404 else False
